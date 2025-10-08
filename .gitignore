@@ -5,14 +5,17 @@ env/
 __pycache__/
 *.pyc
 
-# Datasets - DO NOT PUSH
-# These are too large for a Git repository.
-data/raw/
-data/processed/
+# Ignore all content in data folders...
+data/raw/*
+data/processed/*
+# ...but DO NOT ignore the .gitkeep files inside them.
+!data/raw/.gitkeep
+!data/processed/.gitkeep
 
-# Trained Models - DO NOT PUSH
-# Model files are large binary files.
-models/
+# Ignore all content in the models folder...
+models/*
+# ...but DO NOT ignore the .gitkeep file inside it.
+!models/.gitkeep
 
 # VS Code specific settings
 .vscode/
