@@ -1,0 +1,18 @@
+# Python virtual environments & cache
+.env
+venv/
+env/
+__pycache__/
+*.pyc
+
+# Datasets - DO NOT PUSH
+# These are too large for a Git repository.
+data/raw/
+data/processed/
+
+# Trained Models - DO NOT PUSH
+# Model files are large binary files.
+models/
+
+# VS Code specific settings
+.vscode/
