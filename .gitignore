@@ -8,9 +8,11 @@ __pycache__/
 # Ignore all content in data folders...
 data/raw/*
 data/processed/*
+data/real_world_test_set/*
 # ...but DO NOT ignore the .gitkeep files inside them.
 !data/raw/.gitkeep
 !data/processed/.gitkeep
+!data/real_world_test_set/.gitkeep
 
 # Ignore all content in the models folder...
 models/*

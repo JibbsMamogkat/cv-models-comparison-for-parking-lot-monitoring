@@ -1,0 +1,23 @@
+# Core Data Science & Utility Libraries
+numpy
+pandas
+tqdm
+
+# Computer Vision & Image Processing
+opencv-python
+Pillow
+
+# Deep Learning Framework (PyTorch)
+# Note: This will install the CPU version. For GPU support,
+# see the official PyTorch website for the correct command.
+torch
+torchvision
+
+# Model-Specific Libraries
+ultralytics # For YOLOv8
+
+# Evaluation & Statistical Analysis
+scikit-learn
+matplotlib
+seaborn
+scipy
