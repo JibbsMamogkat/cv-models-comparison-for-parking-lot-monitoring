@@ -21,3 +21,5 @@ models/*
 
 # VS Code specific settings
 .vscode/
+
+data.zip
