@@ -1,0 +1,12 @@
+# parking_data.yaml
+# Make sure these paths EXACTLY match the location on your D: drive
+
+train: D:/Projects/Computer-Vision-Projects/cv-models-comparison/data/processed/detector/images/train
+val: D:/Projects/Computer-Vision-Projects/cv-models-comparison/data/processed/detector/images/valid
+test: D:/Projects/Computer-Vision-Projects/cv-models-comparison/data/processed/detector/images/test
+
+# Number of classes
+nc: 1
+
+# Class names
+names: ['occupied']

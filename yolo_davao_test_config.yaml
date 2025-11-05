@@ -1,0 +1,9 @@
+
+path: D:\Projects\Computer-Vision-Projects\cv-models-comparison\data\real_world_test_set\davao_detector_test_set
+train: images  # 'train:' key is required, we can just point it to 'images'
+val: images    # 'val:' is what we will use for our test split.
+test: images   # Also add a 'test:' key for completeness
+
+# Class definitions
+nc: 1
+names: ['occupied']
