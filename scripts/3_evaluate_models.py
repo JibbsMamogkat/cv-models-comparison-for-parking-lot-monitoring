@@ -10,12 +10,18 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from tqdm import tqdm
 
-def evaluate_classifier(model_name, model_path, data_dir):
+def evaluate_classifier(model_name, model_path, data_dir, test_set_name):
     """
-    Loads a trained classifier model and evaluates it on a test dataset.
+    Loads a trained classifier model and evaluates it on a specified test dataset.
     Generates an accuracy score, a classification report, and a confusion matrix.
+    
+    Args:
+        model_name (str): The architecture name (e.g., 'mobilenet_v2' or 'efficientnet_b0').
+        model_path (str): Path to the saved .pth model weights file.
+        data_dir (str): Path to the test dataset.
+        test_set_name (str): A name for the test set for labeling (e.g., 'Public_Academic' or 'Real_World_Davao').
     """
-    print(f"--- Evaluating Model: {model_name} ---")
+    print(f"\n--- Evaluating Model: {model_name} on {test_set_name} Test Set ---")
     print(f"Loading weights from: {model_path}")
     print(f"Using test data from: {data_dir}")
 
@@ -69,9 +75,9 @@ def evaluate_classifier(model_name, model_path, data_dir):
     all_labels = []
     all_predictions = []
 
-    print("Running predictions on the real-world test set...")
+    print(f"Running predictions on the {test_set_name} test set...")
     with torch.no_grad():
-        for inputs, labels in tqdm(dataloader, desc="Evaluating"):
+        for inputs, labels in tqdm(dataloader, desc=f"Evaluating {test_set_name}"):
             inputs = inputs.to(device)
             labels = labels.to(device)
 
@@ -82,7 +88,7 @@ def evaluate_classifier(model_name, model_path, data_dir):
             all_labels.extend(labels.cpu().numpy())
 
     # --- 4. Calculate and Display Metrics ---
-    print("\n--- Evaluation Complete ---")
+    print(f"\n--- Evaluation Complete for {model_name} on {test_set_name} ---")
     accuracy = accuracy_score(all_labels, all_predictions)
     print(f"Overall Accuracy: {accuracy * 100:.2f}%")
     
@@ -96,12 +102,11 @@ def evaluate_classifier(model_name, model_path, data_dir):
 
     plt.figure(figsize=(8, 6))
     sns.heatmap(cm_df, annot=True, fmt='g', cmap='Blues')
-    plt.title(f'Confusion Matrix - {model_name}')
+    plt.title(f'Confusion Matrix - {model_name} ({test_set_name})')
     plt.ylabel('Actual Label')
     plt.xlabel('Predicted Label')
     
-    # --- BUG FIX: Use the correct model name for saving the plot ---
-    chart_save_path = os.path.join('results', 'charts', f'cm_{model_name}_real_world.png')
+    chart_save_path = os.path.join('results', 'charts', f'cm_{model_name}_{test_set_name}.png')
     os.makedirs(os.path.dirname(chart_save_path), exist_ok=True)
     plt.savefig(chart_save_path)
     
@@ -110,20 +115,58 @@ def evaluate_classifier(model_name, model_path, data_dir):
 
 # --- How to Run This Script ---
 if __name__ == '__main__':
-    # Define the path to your new test set
-    test_data_path = os.path.join('data', 'real_world_test_set', 'davao_classifier_test_set')
+    
+    # --- 1. Define the paths to your two test sets ---
+    
+    # Path to the PUBLIC ACADEMIC test set (from your training data)
+    public_test_path = os.path.join('data', 'processed', 'classifier', 'test')
+    
+    # Path to your REAL-WORLD DAVAO test set
+    real_world_test_path = os.path.join('data', 'real_world_test_set', 'davao_classifier_test_set')
+
+    # --- 2. Run all evaluations ---
 
     # --- Test MobileNetV2 ---
+    print("="*40)
+    print("NOW TESTING: MobileNetV2 on Public Academic Set")
+    print("="*40)
     evaluate_classifier(
         model_name='mobilenet_v2',
         model_path=os.path.join('models', 'mobilenet_v2.pth'),
-        data_dir=test_data_path
+        data_dir=public_test_path,
+        test_set_name='Public_Academic'
+    )
+    
+    print("="*40)
+    print("NOW TESTING: MobileNetV2 on Real-World Davao Set")
+    print("="*40)
+    evaluate_classifier(
+        model_name='mobilenet_v2',
+        model_path=os.path.join('models', 'mobilenet_v2.pth'),
+        data_dir=real_world_test_path,
+        test_set_name='Real_World_Davao'
     )
 
     # --- Test EfficientNetB0 ---
+    print("="*40)
+    print("NOW TESTING: EfficientNetB0 on Public Academic Set")
+    print("="*40)
     evaluate_classifier(
         model_name='efficientnet_b0',
         model_path=os.path.join('models', 'efficientnet_b0.pth'),
-        data_dir=test_data_path
+        data_dir=public_test_path,
+        test_set_name='Public_Academic'
     )
+    
+    print("="*40)
+    print("NOW TESTING: EfficientNetB0 on Real-World Davao Set")
+    print("="*40)
+    evaluate_classifier(
+        model_name='efficientnet_b0',
+        model_path=os.path.join('models', 'efficientnet_b0.pth'),
+        data_dir=real_world_test_path,
+        test_set_name='Real_World_Davao'
+    )
+
+    print("\nAll classifier evaluations are complete.")
 
