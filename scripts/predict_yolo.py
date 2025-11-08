@@ -60,10 +60,10 @@ if __name__ == '__main__':
     # --- IMPORTANT: Set these paths correctly! ---
     
     # Path to your trained model weights (use 'best.pt' for evaluation)
-    path_to_weights = 'runs/detect/train/weights/best.pt' # CHANGE 'train' if you have train2, train3 etc.
+    path_to_weights = 'yolov8n.pt' # CHANGE 'train' if you have train2, train3 etc.
     
     # Path to the single image you want to test
-    path_to_sample_image = 'data/real_world_test_set/earlier-pics/mcm-field2.jpg' # CHANGE this to an actual image filename
+    path_to_sample_image = 'data/real_world_test_set/earlier-pics/mcm-faculty1.jpg' # CHANGE this to an actual image filename
 
     # --- Optional: Output directory ---
     # Where the result image will be saved

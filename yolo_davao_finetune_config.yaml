@@ -1,0 +1,8 @@
+
+path: D:\Projects\Computer-Vision-Projects\cv-models-comparison\data\processed\davao_finetune_set
+train: images/train
+val: images/valid
+
+# Class definitions
+nc: 1
+names: ['occupied']
