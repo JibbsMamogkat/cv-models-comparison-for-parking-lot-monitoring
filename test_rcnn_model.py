@@ -23,7 +23,7 @@ from detectron2.data.datasets import register_coco_instances, load_coco_json
 from detectron2.evaluation import COCOEvaluator, inference_on_dataset
 
 
-def setup_cfg(config_file, weights_file, confidence_threshold=0.7):
+def setup_cfg(config_file, weights_file, confidence_threshold=0.7, is_eval=False):
     """
     Loads configuration from training and sets up the predictor or evaluation config.
     """
@@ -35,19 +35,55 @@ def setup_cfg(config_file, weights_file, confidence_threshold=0.7):
     try:
         cfg.merge_from_file(config_file)
         print(f"Loaded training configuration from {config_file}")
-        # --- VERIFICATION STEP ---
         print(f"VERIFICATION: NUM_CLASSES loaded from config.yaml is: {cfg.MODEL.ROI_HEADS.NUM_CLASSES}")
     except FileNotFoundError:
         print(f"Warning: Training config file not found at {config_file}. Using defaults.")
-        cfg.MODEL.ROI_HEADS.NUM_CLASSES = 3 # Fallback, must match training
+        cfg.MODEL.ROI_HEADS.NUM_CLASSES = 3 
         
     cfg.MODEL.WEIGHTS = weights_file 
     print(f"Attempting to load model weights from: {cfg.MODEL.WEIGHTS}")
     
     cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = confidence_threshold 
     cfg.MODEL.DEVICE = "cuda" if torch.cuda.is_available() else "cpu" 
+    
+    if is_eval:
+        cfg.defrost()
+        cfg.DATALOADER.NUM_WORKERS = 0
+        print("--- FIX APPLIED: Setting DATALOADER.NUM_WORKERS = 0 for stable evaluation. ---")
+        
     cfg.freeze()
     return cfg
+
+def create_image_grid(image_list, grid_rows, grid_cols, img_height, img_width):
+    """
+    Takes a list of images and stitches them into a grid.
+    Pads with blank images if the list is shorter than the grid size.
+    """
+    num_images = len(image_list)
+    num_needed = grid_rows * grid_cols
+    
+    padded_images = list(image_list)
+    while len(padded_images) < num_needed:
+        print("Warning: Not enough images for full grid. Adding blank image.")
+        blank_img = np.zeros((img_height, img_width, 3), dtype=np.uint8)
+        cv2.putText(blank_img, "No Image", (img_width // 4, img_height // 2),
+                    cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+        padded_images.append(blank_img)
+        
+    rows_list = []
+    for i in range(grid_rows):
+        start_index = i * grid_cols
+        end_index = start_index + grid_cols
+        img_row = padded_images[start_index:end_index]
+        
+    
+        resized_row = [cv2.resize(img, (img_width, img_height)) for img in img_row]
+        
+        h_stacked_row = np.hstack(resized_row)
+        rows_list.append(h_stacked_row)
+    
+    final_grid_image = np.vstack(rows_list)
+    return final_grid_image
 
 def predict_single_image(cfg, metadata):
     """
@@ -78,8 +114,7 @@ def predict_single_image(cfg, metadata):
         
     print("Running inference...")
     outputs = predictor(img_bgr)
-    
-    # --- Custom Visualization Logic ---
+
     instances = outputs["instances"].to("cpu")
     boxes = instances.pred_boxes if instances.has("pred_boxes") else None
     scores = instances.scores if instances.has("scores") else None
@@ -87,10 +122,9 @@ def predict_single_image(cfg, metadata):
     
     class_names = metadata.thing_classes
     
-    # Define colors (BGR format for OpenCV)
-    color_occupied = (0, 0, 255) # Red
-    color_empty = (0, 255, 0)   # Green
-    color_other = (255, 0, 0)   # Blue
+    color_occupied = (0, 0, 255) 
+    color_empty = (0, 255, 0)   
+    color_other = (255, 0, 0)  
     
     count_occupied = 0
     count_empty = 0
@@ -107,7 +141,6 @@ def predict_single_image(cfg, metadata):
             class_id = classes[i].item()
             box = boxes[i].tensor.numpy().astype(int)[0] 
             
-            # --- FIX for class_id out of range ---
             if class_id >= len(class_names):
                 print(f"Warning: Predicted class ID {class_id} is out of range for metadata (len={len(class_names)}). Skipping.")
                 continue
@@ -115,14 +148,13 @@ def predict_single_image(cfg, metadata):
             class_name = class_names[class_id]
             color = color_other 
             
-            # --- Check class names for coloring ---
             if class_name == "space-occupied": 
                 color = color_occupied
                 count_occupied += 1
             elif class_name == "space-empty": 
                 color = color_empty
                 count_empty += 1
-            # --- End Check ---
+
 
             cv2.rectangle(output_image_draw, (box[0], box[1]), (box[2], box[3]), color, 2)
             label = f"{class_name}: {score:.0%}"
@@ -238,6 +270,111 @@ def evaluate_test_set(cfg, dataset_name, metadata):
         print(f"❌ ERROR during visualization saving: {e}")
             
     print("\n--- Full Evaluation Complete ---")
+def evaluate_and_save_grids(cfg, dataset_name, metadata):
+    """
+    Runs evaluation, prints results, AND saves 4x4 GRIDS for
+    both Ground Truth and Predictions from the test set.
+    """
+    print(f"\n--- Running Evaluation & Saving 4x4 Grids for: {dataset_name} ---")
+
+    # --- Part 1: Standard Evaluation (Calculate Scores) ---
+    try:
+        model_for_eval = DefaultPredictor(cfg).model
+        print("Model loaded successfully for evaluation scoring.")
+        
+        evaluator = COCOEvaluator(dataset_name, output_dir=cfg.OUTPUT_DIR, tasks=("bbox",))
+        print("Forcing evaluator to use the model's metadata...")
+        evaluator._metadata = metadata
+        
+        test_loader_for_eval = build_detection_test_loader(cfg, dataset_name)
+        
+        print("Starting official evaluation scoring (this may take a few minutes)...")
+        results = inference_on_dataset(model_for_eval, test_loader_for_eval, evaluator)
+        
+        print("\n--- Evaluation Results (Scores) ---")
+        print(results)
+        print("--- Score Calculation Complete ---")
+        
+    except Exception as e:
+        print(f"❌ ERROR during evaluation scoring: {e}")
+        import traceback
+        traceback.print_exc()
+        return  
+
+    # --- Part 2: Save 4x4 Prediction & Ground Truth Grids ---
+    print("\n--- Visualizing and Saving 4x4 Grids (16 images) ---")
+    output_viz_dir = f"./prediction_outputs/{dataset_name}_4x4_grid"
+    os.makedirs(output_viz_dir, exist_ok=True)
+    
+    GRID_ROWS = 4
+    GRID_COLS = 4
+    IMG_WIDTH = 640 
+    IMG_HEIGHT = 640
+    NUM_IMAGES = GRID_ROWS * GRID_COLS
+
+    try:
+        dataset_dicts = DatasetCatalog.get(dataset_name)
+        if not dataset_dicts:
+            print(f"❌ ERROR: Dataset dictionary for '{dataset_name}' is empty. Cannot visualize.")
+            return
+            
+        images_to_process = dataset_dicts[:NUM_IMAGES]
+        if len(images_to_process) < NUM_IMAGES:
+            print(f"Warning: Dataset only has {len(images_to_process)} images. Grid will be padded.")
+
+        predictor = DefaultPredictor(cfg)
+        
+        processed_gt_images = []
+        processed_pred_images = []
+
+        print(f"Processing {len(images_to_process)} images for grids...")
+        
+        for d in images_to_process:
+            file_path = d["file_name"]
+            if not os.path.exists(file_path):
+                print(f"⚠️ Skipping missing image: {file_path}")
+                continue
+                
+            img = cv2.imread(file_path)
+            if img is None:
+                print(f"⚠️ Skipping unreadable image: {file_path}")
+                continue
+
+            # --- Create Ground Truth Image ---
+            v_gt = Visualizer(img[:, :, ::-1], metadata, scale=1.0)
+            out_gt = v_gt.draw_dataset_dict(d)
+            img_gt = out_gt.get_image()[:, :, ::-1]
+            processed_gt_images.append(img_gt) # Resize later in helper
+
+            # --- Create Prediction Image ---
+            outputs = predictor(img)
+            v_pred = Visualizer(img[:, :, ::-1], metadata, scale=1.0)
+            out_pred = v_pred.draw_instance_predictions(outputs["instances"].to("cpu"))
+            img_pred = out_pred.get_image()[:, :, ::-1]
+            processed_pred_images.append(img_pred) # Resize later in helper
+
+        if not processed_gt_images:
+            print("❌ ERROR: No images were successfully processed for grids.")
+            return
+
+        # --- Stitch and Save Grids ---
+        print("Stitching grids...")
+        gt_grid_image = create_image_grid(processed_gt_images, GRID_ROWS, GRID_COLS, IMG_HEIGHT, IMG_WIDTH)
+        pred_grid_image = create_image_grid(processed_pred_images, GRID_ROWS, GRID_COLS, IMG_HEIGHT, IMG_WIDTH)
+
+        gt_save_path = os.path.join(output_viz_dir, f"{dataset_name}_ground_truth_4x4.jpg")
+        pred_save_path = os.path.join(output_viz_dir, f"{dataset_name}_prediction_4x4_conf{cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST:.2f}.jpg")
+
+        cv2.imwrite(gt_save_path, gt_grid_image)
+        cv2.imwrite(pred_save_path, pred_grid_image)
+
+        print(f"✅ Ground Truth 4x4 grid saved to: '{gt_save_path}'")
+        print(f"✅ Prediction 4x4 grid saved to:   '{pred_save_path}'")
+            
+    except Exception as e:
+        print(f"❌ ERROR during grid visualization: {e}")
+            
+    print("\n--- Full Evaluation and Grid-Saving Complete ---")
 
 
 def main(args): 
@@ -343,7 +480,7 @@ def main(args):
         predict_single_image(cfg_predict, pred_metadata)
         
     elif choice == '2':
-        cfg_eval_std = setup_cfg(config_path, weights_path, confidence_threshold=conf_thresh) 
+        cfg_eval_std = setup_cfg(config_path, weights_path, confidence_threshold=conf_thresh, is_eval=True) 
         if std_test_dataset_name in DatasetCatalog.list():
              if metadata_std is None: metadata_std = MetadataCatalog.get(std_test_dataset_name)
              evaluate_test_set(cfg_eval_std, std_test_dataset_name, metadata_std) 
@@ -351,17 +488,18 @@ def main(args):
              print("❌ ERROR: Standard test dataset was not registered successfully. Cannot run evaluation.")
              
     elif choice == '3': 
-        cfg_eval_davao = setup_cfg(config_path, weights_path, confidence_threshold=conf_thresh) 
+        cfg_eval_davao = setup_cfg(config_path, weights_path, confidence_threshold=conf_thresh, is_eval=True)
         if davao_test_dataset_name in DatasetCatalog.list():
 
-             if metadata_std is not None:
-                 print("Using standard metadata map for Davao evaluation.")
-                 evaluate_test_set(cfg_eval_davao, davao_test_dataset_name, metadata_std) # Pass metadata_std
-             else:
-                 print("❌ ERROR: Standard test set metadata not loaded. Cannot run Davao evaluation correctly.")
+            if metadata_std is not None:
+                print("Using standard metadata map for Davao evaluation.")
+                # --- THIS LINE IS CHANGED ---
+                evaluate_and_save_grids(cfg_eval_davao, davao_test_dataset_name, metadata_std) # Pass metadata_std
+            else:
+                print("❌ ERROR: Standard test set metadata not loaded. Cannot run Davao evaluation correctly.")
         else:
-             print(f"❌ ERROR: Davao test dataset ('{davao_test_dataset_name}') was not registered successfully.")
-             print(f"   Ensure '{davao_json_path}' exists and images are in '{base_data_path_davao}'.")
+            print(f"❌ ERROR: Davao test dataset ('{davao_test_dataset_name}') was not registered successfully.")
+            print(f"   Ensure '{davao_json_path}' exists and images are in '{base_data_path_davao}'.")
 
     else:
         print("Invalid choice. Please enter 1, 2, or 3.")
